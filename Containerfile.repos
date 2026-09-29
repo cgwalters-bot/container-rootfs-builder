@@ -1,0 +1,5 @@
+# Example only: build this with an external context containing repos/*.repo.
+# Never put credentials or private repository files in this source tree.
+FROM quay.io/fedora/fedora:44
+RUN rm -f /etc/yum.repos.d/*.repo
+COPY repos/*.repo /etc/yum.repos.d/
