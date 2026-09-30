@@ -19,7 +19,3 @@ See [building](building.md) for the rootfs contract, repository injection, and
 source pins. The [DNF5 chroot](background-dnf5-chroot.md), [DNF5 manifest](background-dnf5-manifest.md),
 and [Hummingbird](background-hummingbird.md) pages describe related background.
 Possible follow-on work is collected in [ideas](ideas.md).
-
-> **Review notice:** This project is 100% LLM-generated and has not yet had
-> human review. Treat it as an experiment, not production-supported software;
-> automated build checks do not replace human review or boot testing.
