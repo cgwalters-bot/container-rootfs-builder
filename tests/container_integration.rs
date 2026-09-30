@@ -329,4 +329,19 @@ mod tests {
         assert!(select_cases("bootc44,").is_err());
         assert!(select_cases("unknown").is_err());
     }
+
+    #[test]
+    fn source_checkout_retries_only_the_pinned_fetch() {
+        let containerfile =
+            std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/Containerfile"))
+                .expect("read Containerfile");
+        assert!(containerfile.contains("RUN set -euo pipefail;"));
+        assert!(
+            containerfile.contains("while ! git -C \"$work\" fetch --depth=1 origin \"$expected\"")
+        );
+        assert!(containerfile.contains("if [ \"$attempt\" -ge 3 ]; then return 1; fi"));
+        assert!(containerfile.contains("sleep \"$((attempt * 10 - 5))\""));
+        assert!(containerfile.contains("git -C \"$work\" rev-parse HEAD"));
+        assert!(containerfile.contains("test \"$actual\" = \"$expected\""));
+    }
 }

@@ -12,12 +12,17 @@ ARG BOOTC_COMMIT=bbea58e7db3b403785d632d7db3f75bfe6cd5415
 ARG F44_ATOMIC_COMMIT=1a1effa1ae6ef22c961ff5962ec314d9208231e1
 ARG F45_ATOMIC_COMMIT=9dbdbe2f1c8009b2257201ffd4719100ff0b0ba1
 
-RUN set -eux; \
+RUN set -euo pipefail; \
     checkout() { \
       url="$1"; expected="$2"; destination="$3"; entrypoint="$4"; \
       work="/work/$(basename "$destination")"; mkdir -p "$work" "$destination"; shift 3; \
       git -C "$work" init; git -C "$work" remote add origin "$url"; \
-      git -C "$work" fetch --depth=1 origin "$expected"; git -C "$work" checkout --detach "$expected"; \
+      attempt=1; \
+      while ! git -C "$work" fetch --depth=1 origin "$expected"; do \
+        if [ "$attempt" -ge 3 ]; then return 1; fi; \
+        sleep "$((attempt * 10 - 5))"; attempt=$((attempt + 1)); \
+      done; \
+      git -C "$work" checkout --detach "$expected"; \
       actual="$(git -C "$work" rev-parse HEAD)"; test "$actual" = "$expected"; \
       git -C "$work" archive HEAD | tar -x -C "$destination"; \
       manifest="$destination/.source-provenance.json"; \
