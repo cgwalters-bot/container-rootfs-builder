@@ -51,6 +51,7 @@ RUN cargo build --release --locked
 FROM ${RUNTIME_IMAGE}
 RUN dnf install -y rpm-ostree python3 bootc selinux-policy-targeted && dnf clean all
 COPY --from=build /src/target/release/container-rootfs-builder /usr/local/bin/
+COPY --from=build /src/target/release/image-diff /usr/local/bin/image-diff
 COPY --from=sources /sources /sources
 COPY --from=sources /sources/bootc/COPYING /usr/share/licenses/bootc-base-imagectl/COPYING
 RUN cd /sources/bootc && ./install-manifests && install -m 0755 bootc-base-imagectl /usr/local/bin/bootc-base-imagectl
