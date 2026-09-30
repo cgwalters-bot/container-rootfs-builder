@@ -9,7 +9,8 @@ ARG F44_PUNGI_COMMIT=768b06a946c4b33e3f759446d357f48773f9862f
 ARG F45_KIWI_COMMIT=daf359394913068f4fc18a8b7aafc404caeb8257
 ARG F45_PUNGI_COMMIT=233933230bb6a97017e937efea20fb9c4d40f948
 ARG BOOTC_COMMIT=bbea58e7db3b403785d632d7db3f75bfe6cd5415
-ARG ATOMIC_COMMIT=9dbdbe2f1c8009b2257201ffd4719100ff0b0ba1
+ARG F44_ATOMIC_COMMIT=1a1effa1ae6ef22c961ff5962ec314d9208231e1
+ARG F45_ATOMIC_COMMIT=9dbdbe2f1c8009b2257201ffd4719100ff0b0ba1
 
 RUN set -eux; \
     checkout() { \
@@ -36,8 +37,9 @@ RUN set -eux; \
     checkout https://forge.fedoraproject.org/releng/pungi-fedora "$F44_PUNGI_COMMIT" /sources/f44/pungi fedora-container.conf; \
     checkout https://forge.fedoraproject.org/releng/kiwi-descriptions "$F45_KIWI_COMMIT" /sources/f45/kiwi Fedora.kiwi; \
     checkout https://forge.fedoraproject.org/releng/pungi-fedora "$F45_PUNGI_COMMIT" /sources/f45/pungi fedora-container.conf; \
-     checkout https://gitlab.com/fedora/bootc/base-images "$BOOTC_COMMIT" /sources/bootc bootc-base-imagectl install-manifests; \
-    checkout https://forge.fedoraproject.org/atomic-desktops/config "$ATOMIC_COMMIT" /sources/f45/atomic silverblue.yaml
+    checkout https://gitlab.com/fedora/bootc/base-images "$BOOTC_COMMIT" /sources/bootc bootc-base-imagectl install-manifests; \
+    checkout https://forge.fedoraproject.org/atomic-desktops/config "$F44_ATOMIC_COMMIT" /sources/f44/atomic silverblue.yaml kinoite.yaml; \
+    checkout https://forge.fedoraproject.org/atomic-desktops/config "$F45_ATOMIC_COMMIT" /sources/f45/atomic silverblue.yaml kinoite.yaml
 
 FROM docker.io/library/rust:1.90-bookworm AS build
 WORKDIR /src

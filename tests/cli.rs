@@ -42,7 +42,10 @@ fn plan_is_rootless_and_records_immutable_commits() {
         ("quay.io/fedora/fedora-bootc:43", "fedora-standard.yaml"),
         ("quay.io/fedora/fedora-bootc:44", "fedora-standard.yaml"),
         ("quay.io/fedora/fedora-bootc:45", "fedora-standard.yaml"),
+        ("quay.io/fedora/fedora-silverblue:44", "silverblue.yaml"),
+        ("quay.io/fedora/fedora-kinoite:44", "kinoite.yaml"),
         ("quay.io/fedora/fedora-silverblue:45", "silverblue.yaml"),
+        ("quay.io/fedora/fedora-kinoite:45", "kinoite.yaml"),
     ] {
         Command::cargo_bin("container-rootfs-builder")
             .unwrap()
@@ -133,6 +136,134 @@ fn build_rootfs_uses_the_release_manifest_with_a_fake_runner() {
     }
 }
 
+#[cfg(unix)]
+#[test]
+fn build_rootfs_dispatches_atomic_desktops_to_native_rpm_ostree() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = tempdir().unwrap();
+    let source_root = root.path().join("repos");
+    fs::create_dir_all(source_root.join("etc")).unwrap();
+    let output = root.path().join("runner-args");
+    let runner = root.path().join("fake-rpm-ostree");
+    fs::write(
+        &runner,
+        "#!/bin/sh\nprintf '%s\\n' \"$@\" >> \"$RUNNER_ARGS\"\nprintf '%s\\n' -- >> \"$RUNNER_ARGS\"\nif [ \"$2\" = tree ]; then printf 'flattened manifest\\n'; fi\n",
+    )
+    .unwrap();
+    fs::set_permissions(&runner, fs::Permissions::from_mode(0o755)).unwrap();
+    for (release, variant) in [
+        ("44", "silverblue"),
+        ("44", "kinoite"),
+        ("45", "silverblue"),
+        ("45", "kinoite"),
+    ] {
+        fs::write(
+            source_root.join("etc/os-release"),
+            format!("ID=fedora\nVERSION_ID={release}\n"),
+        )
+        .unwrap();
+        fs::write(&output, "").unwrap();
+        let target = root.path().join(format!("rootfs-{variant}-{release}"));
+        Command::cargo_bin("container-rootfs-builder")
+            .unwrap()
+            .env("CONTAINER_ROOTFS_BUILDER_RPM_OSTREE", &runner)
+            .env("RUNNER_ARGS", &output)
+            .args([
+                "build-rootfs",
+                &format!("--from=quay.io/fedora/fedora-{variant}:{release}"),
+                "--target",
+                target.to_str().unwrap(),
+                "--source-root",
+                source_root.to_str().unwrap(),
+                "--source-root-rw",
+            ])
+            .assert()
+            .success()
+            .stdout("");
+        let invocations = fs::read_to_string(&output).unwrap();
+        let expected = format!(
+            "compose\ntree\n--print-only\n--source-root={}\n/sources/f{release}/atomic/{variant}.yaml\n--\ncompose\nrootfs\n--source-root-rw={}\n/sources/f{release}/atomic/{variant}.yaml\n{}\n--\n",
+            source_root.display(),
+            source_root.display(),
+            target.display()
+        );
+        assert_eq!(invocations, expected);
+        assert!(!invocations.contains("bootc-base-imagectl"));
+        assert!(!invocations.contains("container lint"));
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn silverblue_stops_when_print_only_validation_fails() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = tempdir().unwrap();
+    let source_root = root.path().join("repos");
+    fs::create_dir_all(source_root.join("etc")).unwrap();
+    fs::write(
+        source_root.join("etc/os-release"),
+        "ID=fedora\nVERSION_ID=45\n",
+    )
+    .unwrap();
+    let runner = root.path().join("failing-rpm-ostree");
+    fs::write(&runner, "#!/bin/sh\nexit 42\n").unwrap();
+    fs::set_permissions(&runner, fs::Permissions::from_mode(0o755)).unwrap();
+    Command::cargo_bin("container-rootfs-builder")
+        .unwrap()
+        .env("CONTAINER_ROOTFS_BUILDER_RPM_OSTREE", &runner)
+        .args([
+            "build-rootfs",
+            "--from=quay.io/fedora/fedora-silverblue:45",
+            "--target",
+            root.path().join("rootfs").to_str().unwrap(),
+            "--source-root",
+            source_root.to_str().unwrap(),
+            "--source-root-rw",
+        ])
+        .assert()
+        .failure()
+        .stderr(contains("compose tree --print-only failed"));
+}
+
+#[cfg(unix)]
+#[test]
+fn silverblue_reports_native_rootfs_failure_after_validation() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = tempdir().unwrap();
+    let source_root = root.path().join("repos");
+    fs::create_dir_all(source_root.join("etc")).unwrap();
+    fs::write(
+        source_root.join("etc/os-release"),
+        "ID=fedora\nVERSION_ID=45\n",
+    )
+    .unwrap();
+    let runner = root.path().join("rootfs-failing-rpm-ostree");
+    fs::write(
+        &runner,
+        "#!/bin/sh\nif [ \"$2\" = rootfs ]; then exit 42; fi\nexit 0\n",
+    )
+    .unwrap();
+    fs::set_permissions(&runner, fs::Permissions::from_mode(0o755)).unwrap();
+    Command::cargo_bin("container-rootfs-builder")
+        .unwrap()
+        .env("CONTAINER_ROOTFS_BUILDER_RPM_OSTREE", &runner)
+        .args([
+            "build-rootfs",
+            "--from=quay.io/fedora/fedora-silverblue:45",
+            "--target",
+            root.path().join("rootfs").to_str().unwrap(),
+            "--source-root",
+            source_root.to_str().unwrap(),
+            "--source-root-rw",
+        ])
+        .assert()
+        .failure()
+        .stderr(contains("compose rootfs failed"));
+}
+
 #[test]
 fn build_rootfs_rejects_source_release_mismatch_and_overlap() {
     let root = tempdir().unwrap();
@@ -156,6 +287,33 @@ fn build_rootfs_rejects_source_release_mismatch_and_overlap() {
         .stderr(contains(
             "source root is Fedora 43, but --from requests Fedora 44",
         ));
+
+    for (release, variant) in [
+        ("44", "silverblue"),
+        ("44", "kinoite"),
+        ("45", "silverblue"),
+        ("45", "kinoite"),
+    ] {
+        Command::cargo_bin("container-rootfs-builder")
+            .unwrap()
+            .args([
+                "build-rootfs",
+                &format!("--from=quay.io/fedora/fedora-{variant}:{release}"),
+                "--target",
+                root.path()
+                    .join(format!("{variant}-{release}-target"))
+                    .to_str()
+                    .unwrap(),
+                "--source-root",
+                source.to_str().unwrap(),
+                "--source-root-rw",
+            ])
+            .assert()
+            .failure()
+            .stderr(contains(format!(
+                "source root is Fedora 43, but --from requests Fedora {release}"
+            )));
+    }
 
     let nested = source.join("nested");
     Command::cargo_bin("container-rootfs-builder")
@@ -206,6 +364,73 @@ fn repo_image_example_selects_external_repo_files() {
 }
 
 #[test]
+fn atomic_rootfs_containerfile_does_not_claim_bootability() {
+    let file = fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/Containerfile.atomic-rootfs"
+    ))
+    .unwrap();
+    assert!(file.contains("ARG FEDORA_RELEASE=44"));
+    assert!(file.contains("ARG ATOMIC_VARIANT=silverblue"));
+    assert!(file.contains("quay.io/fedora/fedora-${ATOMIC_VARIANT}:${FEDORA_RELEASE}"));
+    assert!(file.contains(
+        "quay.io/fedora/fedora@sha256:8938dce2600de0b78f5ef8d1541192f207fdafb7414d83957f6687147aa8998b"
+    ));
+    assert!(file.contains("--source-root=/repos --source-root-rw"));
+    assert!(!file.contains("LABEL"));
+    assert!(!file.contains("bootc container lint"));
+}
+
+#[test]
+fn atomic_desktop_catalog_has_exact_native_inputs() {
+    for (release, variant, commit) in [
+        (
+            "44",
+            "silverblue",
+            "1a1effa1ae6ef22c961ff5962ec314d9208231e1",
+        ),
+        ("44", "kinoite", "1a1effa1ae6ef22c961ff5962ec314d9208231e1"),
+        (
+            "45",
+            "silverblue",
+            "9dbdbe2f1c8009b2257201ffd4719100ff0b0ba1",
+        ),
+        ("45", "kinoite", "9dbdbe2f1c8009b2257201ffd4719100ff0b0ba1"),
+    ] {
+        let output = Command::cargo_bin("container-rootfs-builder")
+            .unwrap()
+            .args([
+                "--from",
+                &format!("quay.io/fedora/fedora-{variant}:{release}"),
+                "--plan",
+                "/target-rootfs",
+            ])
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        let plan: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(plan["declared_release"], release);
+        assert_eq!(plan["engine"]["kind"], "rpm-ostree-rootfs");
+        assert_eq!(
+            plan["source_definitions"][0]["entrypoint"],
+            format!("{variant}.yaml")
+        );
+        assert_eq!(
+            plan["source_definitions"][0]["source_ref"],
+            format!("f{release}")
+        );
+        assert_eq!(plan["source_definitions"][0]["source_commit"], commit);
+        assert_eq!(plan["source_definitions"][0]["release_tag"], release);
+        assert_eq!(
+            plan["source_definitions"][0]["observed_source_release"],
+            release
+        );
+        assert_eq!(plan["output_contract"]["artifact"], "filesystem-rootfs");
+        assert_eq!(plan["output_contract"]["bootability"], "not-asserted");
+    }
+}
+
+#[test]
 fn build_rootfs_rejects_unknown_and_existing_targets() {
     let root = tempdir().unwrap();
     let existing = root.path().join("existing");
@@ -221,7 +446,7 @@ fn build_rootfs_rejects_unknown_and_existing_targets() {
         ])
         .assert()
         .failure()
-        .stderr(contains("supports only"));
+        .stderr(contains("remains plan-only"));
     Command::cargo_bin("container-rootfs-builder")
         .unwrap()
         .args([

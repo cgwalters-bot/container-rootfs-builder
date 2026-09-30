@@ -1,0 +1,17 @@
+ARG REPOS_IMAGE=quay.io/fedora/fedora@sha256:8938dce2600de0b78f5ef8d1541192f207fdafb7414d83957f6687147aa8998b
+ARG CONFIG_BUILDER=localhost/container-rootfs-builder:latest
+ARG FEDORA_RELEASE=44
+ARG ATOMIC_VARIANT=silverblue
+
+FROM ${REPOS_IMAGE} AS repos
+FROM ${CONFIG_BUILDER} AS compose
+ARG ATOMIC_VARIANT
+ARG FEDORA_RELEASE
+RUN --mount=from=repos,src=/,target=/repos,rw \
+    /usr/local/bin/container-rootfs-builder build-rootfs \
+      --from=quay.io/fedora/fedora-${ATOMIC_VARIANT}:${FEDORA_RELEASE} \
+      --source-root=/repos --source-root-rw --target=/target-rootfs
+
+# Experimental filesystem rootfs only; this does not assert bootability.
+FROM scratch
+COPY --from=compose /target-rootfs /
