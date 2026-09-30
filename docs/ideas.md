@@ -49,3 +49,14 @@ Desktop definitions or their finalization steps.
   package/build tooling, retain the manifest in the derived image, and test
   predictable reapplication. This mode deliberately keeps the base image's OCI
   layers; rebuilding a rootfs with `FROM scratch` is a separate use case.
+
+- [ ] Spike on declarative **non-RPM artifact copies** in manifests, equivalent
+  to `COPY --from=image /usr/lib/systemd/foo.service /usr/lib/systemd/foo.service`.
+  Start with regular files from digest-pinned, read-only image sources; specify
+  exact destinations, numeric ownership, and modes. Use `cap_std` for source
+  and target confinement, reject symlink escapes and collisions by default,
+  and require explicit policy for overriding RPM-owned files. Apply copies
+  before native finalization where the backend supports that phase; reject
+  unsupported ordering rather than silently copying afterward. Record source
+  digests and applied-file hashes, and test bytes, metadata, and failure cases.
+  Copying a unit does not enable it or imply inherited source-image layers.

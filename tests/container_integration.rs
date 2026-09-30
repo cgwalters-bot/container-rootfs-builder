@@ -1,3 +1,5 @@
+//! Opt-in container integration tests for supported Fedora root filesystems.
+
 use std::{
     env,
     fs::{self, File},
@@ -8,10 +10,12 @@ use std::{
 use serde_json::Value;
 
 const REPOS_IMAGE: &str =
-    "quay.io/fedora/fedora@sha256:8938dce2600de0b78f5ef8d1541192f207fdafb7414d83957f6687147aa8998b";
+    "quay.io/fedora/fedora@sha256:80d49c6c7c4303efb5eebc0317e343588d5d482146ca2be48eb82494d2a83060";
+const RUNTIME_IMAGE: &str =
+    "quay.io/fedora/fedora@sha256:e1e716b2f6ca98e1ed41e62d32a7bcbf1637d5b931894299eab9c659a16fe8ed";
 const BUILDER_IMAGE: &str = "localhost/container-rootfs-builder:integration";
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct Case {
     name: &'static str,
     variant: Option<&'static str>,
@@ -141,6 +145,14 @@ fn image_inspect(logs: &Path, name: &str, image: &str) -> Value {
 fn container_images_have_expected_rootfs_contracts() {
     let logs = log_dir();
     let cases = selected_cases();
+    // Do not let a locally cached image hide a removed or mistyped Quay pin.
+    for (name, image) in [
+        ("remote-repos-image", REPOS_IMAGE),
+        ("remote-runtime-image", RUNTIME_IMAGE),
+    ] {
+        let reference = format!("docker://{image}");
+        checked("skopeo", &["inspect", &reference], name, &logs);
+    }
     checked(
         "podman",
         &[

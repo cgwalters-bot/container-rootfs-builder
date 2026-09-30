@@ -88,11 +88,14 @@ metadata; use it only with a disposable source image.
 
 `Containerfile.rootfs` defaults to Fedora 44 for both the bootc image and the
 official repository image. The digest is a `linux/amd64` selection:
+the pinned Quay manifest is a reachability check, not a promise of permanent
+registry retention. When intentionally bumping a pin, verify its remote
+manifest and Fedora release/architecture metadata before updating all copies.
 
 ```console
 podman build --security-opt=label=disable --cap-add=all --device=/dev/fuse \
   --build-arg CONFIG_BUILDER=localhost/container-rootfs-builder:latest \
-  --build-arg REPOS_IMAGE=quay.io/fedora/fedora@sha256:8938dce2600de0b78f5ef8d1541192f207fdafb7414d83957f6687147aa8998b \
+  --build-arg REPOS_IMAGE=quay.io/fedora/fedora@sha256:80d49c6c7c4303efb5eebc0317e343588d5d482146ca2be48eb82494d2a83060 \
   -f Containerfile.rootfs -t localhost/fedora-bootc-from-scratch:44 .
 ```
 
@@ -155,7 +158,7 @@ image (the digest selects `linux/amd64`), leave `FEDORA_RELEASE` at 44 and
 ```console
 podman build --security-opt=label=disable --cap-add=all --device=/dev/fuse \
   --build-arg CONFIG_BUILDER=localhost/container-rootfs-builder:latest \
-  --build-arg REPOS_IMAGE=quay.io/fedora/fedora@sha256:8938dce2600de0b78f5ef8d1541192f207fdafb7414d83957f6687147aa8998b \
+  --build-arg REPOS_IMAGE=quay.io/fedora/fedora@sha256:80d49c6c7c4303efb5eebc0317e343588d5d482146ca2be48eb82494d2a83060 \
   --build-arg ATOMIC_VARIANT=kinoite \
   -f Containerfile.atomic-rootfs -t localhost/kinoite-rootfs-experiment:44 .
 podman run --rm --entrypoint rpm localhost/kinoite-rootfs-experiment:44 -E '%{fedora}'
@@ -173,6 +176,18 @@ are not claims that the experiment reproduces published OCI images. Other
 desktops have not been mapped or built.
 
 ## Development
+
+`just fmt` formats Rust sources; `just fmt-check` checks formatting without
+modifying files. `just validate` runs static checks, and `just check-all` adds
+unit/CLI tests. `just unit` (also `just test`) uses nextest when available,
+otherwise Cargo's test runner. Ignored container tests remain opt-in.
+
+### Continuous integration
+
+GitHub CI runs `just check-all` and independent Fedora 44 rootfs integration
+jobs for bootc, Silverblue, and Kinoite. CI is automated evidence only: this
+repository still requires human review, and the desktop rootfs checks do not
+claim bootability.
 
 ```console
 cargo fmt --check

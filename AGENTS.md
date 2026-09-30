@@ -7,13 +7,19 @@ and [base-images](https://gitlab.com/fedora/bootc/base-images) for context.
 
 ## Checks
 
-Run from the repository root:
+Run `just check-all` before submitting. This formats nothing and runs the
+locked build checks, unit tests, and Clippy; detailed output is written below
+`target/integration-logs/`. Run `just integration all` when executable or
+container-build behavior changes.
 
-```console
-cargo fmt --check
-cargo test
-cargo clippy --all-targets -- -D warnings
-```
+## Rust
+
+- Keep parsing separate from I/O so parsers can be covered by focused unit
+  tests.
+- Propagate errors rather than silently discarding them.
+- Prefer safe `rustix`, `cap_std`, or `cap_fs_ext` APIs to `libc`; unsafe code
+  remains forbidden.
+- Add narrowly scoped lint exceptions only with a concrete justification.
 
 ## Source and build safety
 
@@ -30,8 +36,10 @@ cargo clippy --all-targets -- -D warnings
 - Preserve this project's Apache-2.0 declaration and the official helper's
   MIT `COPYING` notice. Do not add unsupported copyright holders.
 
-This project is entirely LLM-generated and has not had human review. Require
+This project is entirely AI-generated and has not had human review. Require
 human review before publishing or treating a build as production-supported;
 an AI review does not replace it. Independently review substantial generated
-changes. Do not add a `Signed-off-by` trailer on anyone's behalf. Do not
-commit changes unless the user explicitly asks for a commit.
+changes. Use generic `Assisted-by: AI` or `Generated-by: AI` attribution and
+do not advertise specific models or tools. Do not add a `Signed-off-by`
+trailer on anyone's behalf. Do not commit changes unless the user explicitly
+asks for a commit.

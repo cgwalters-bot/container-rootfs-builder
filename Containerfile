@@ -1,5 +1,5 @@
 # A source-backed builder; the generated rootfs is deliberately not an image layer.
-ARG RUNTIME_IMAGE=quay.io/fedora/fedora@sha256:370f643e96ec63bd503f506f2b406cbc447eed2179206d0ca13ac93bde2b5e43
+ARG RUNTIME_IMAGE=quay.io/fedora/fedora@sha256:e1e716b2f6ca98e1ed41e62d32a7bcbf1637d5b931894299eab9c659a16fe8ed
 FROM docker.io/alpine/git:2.47.2 AS sources
 
 ARG F43_KIWI_COMMIT=1247fcf8967eb2273a314d4703c2f907de0e6031

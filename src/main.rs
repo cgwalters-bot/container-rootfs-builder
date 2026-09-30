@@ -1,4 +1,5 @@
 #![forbid(unsafe_code)]
+//! Plan and build source-backed Fedora container root filesystems.
 
 use std::{
     collections::HashSet,
@@ -156,7 +157,7 @@ const F45_ATOMIC_COMMIT: &str = "9dbdbe2f1c8009b2257201ffd4719100ff0b0ba1";
 const PROVENANCE: &str = ".source-provenance.json";
 const BOOTC_HELPER: &str = "/usr/local/bin/bootc-base-imagectl";
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct SourceTemplate {
     source_url: &'static str,
     source_ref: &'static str,
@@ -168,13 +169,13 @@ struct SourceTemplate {
     observed_source_release: Option<&'static str>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum CatalogSources {
     FedoraContainer,
     One(SourceTemplate),
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct CatalogEntry {
     image_reference: &'static str,
     declared_release: &'static str,
@@ -451,9 +452,7 @@ fn validate_new_target(target: &Path) -> Result<()> {
     Ok(())
 }
 
-fn source_release(source_root: &Path) -> Result<String> {
-    let os_release = std::fs::read_to_string(source_root.join("etc/os-release"))
-        .with_context(|| format!("reading {}/etc/os-release", source_root.display()))?;
+fn parse_os_release(os_release: &str) -> Result<String> {
     let id = os_release.lines().find_map(|line| {
         line.strip_prefix("ID=")
             .map(|value| value.trim_matches('"').to_string())
@@ -470,6 +469,12 @@ fn source_release(source_root: &Path) -> Result<String> {
     release.filter(|value| !value.is_empty()).context(
         "source root /etc/os-release has no VERSION_ID; refusing to guess the repository release",
     )
+}
+
+fn source_release(source_root: &Path) -> Result<String> {
+    let os_release = std::fs::read_to_string(source_root.join("etc/os-release"))
+        .with_context(|| format!("reading {}/etc/os-release", source_root.display()))?;
+    parse_os_release(&os_release)
 }
 
 fn validate_source_target(source_root: &Path, target: &Path) -> Result<()> {
@@ -578,12 +583,10 @@ fn build_rootfs(args: BuildRootfsArgs) -> Result<()> {
     }
     Ok(())
 }
-fn read_recipe(path: &Path) -> Result<Vec<String>> {
-    let source = std::fs::read_to_string(path)
-        .with_context(|| format!("reading recipe {}", path.display()))?;
-    let blueprint: Blueprint = match path.extension().and_then(|x| x.to_str()) {
-        Some("toml") => toml::from_str(&source).context("parsing TOML blueprint")?,
-        Some("ncl") => nickel_lang_core::deserialize::from_str(&source)
+fn parse_recipe(source: &str, extension: Option<&str>) -> Result<Vec<String>> {
+    let blueprint: Blueprint = match extension {
+        Some("toml") => toml::from_str(source).context("parsing TOML blueprint")?,
+        Some("ncl") => nickel_lang_core::deserialize::from_str(source)
             .map_err(|e| anyhow::anyhow!("evaluating Nickel recipe: {e}"))?,
         _ => bail!("recipe must have a .toml or .ncl extension"),
     };
@@ -607,6 +610,15 @@ fn read_recipe(path: &Path) -> Result<Vec<String>> {
             Ok(value)
         })
         .collect()
+}
+
+fn read_recipe(path: &Path) -> Result<Vec<String>> {
+    let source = std::fs::read_to_string(path)
+        .with_context(|| format!("reading recipe {}", path.display()))?;
+    parse_recipe(
+        &source,
+        path.extension().and_then(|extension| extension.to_str()),
+    )
 }
 fn valid_package(value: &str) -> Result<()> {
     if value.is_empty()
@@ -709,7 +721,7 @@ fn open_regular(root: &Dir, relative: &Path) -> Result<(cap_std::fs::File, PathB
     options.read(true);
     #[cfg(unix)]
     {
-        options.custom_flags(libc::O_NOFOLLOW);
+        options.custom_flags(rustix::fs::OFlags::NOFOLLOW.bits() as i32);
     }
     let file = root
         .open_with(relative, &options)
@@ -773,7 +785,7 @@ fn provenance(
             o.read(true);
             #[cfg(unix)]
             {
-                o.custom_flags(libc::O_NOFOLLOW);
+                o.custom_flags(rustix::fs::OFlags::NOFOLLOW.bits() as i32);
             }
             o
         })
@@ -1021,6 +1033,31 @@ mod tests {
         assert_eq!(read_recipe(f.path())?, ["bash-5.2"]);
         writeln!(f, "\n[[packages]]\nname=\"bad\"\nversion=\"?\"")?;
         assert!(read_recipe(f.path()).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn parses_os_release_without_io() -> Result<()> {
+        assert_eq!(
+            parse_os_release("NAME=Fedora\nID=fedora\nVERSION_ID=\"44\"\n")?,
+            "44"
+        );
+        assert!(parse_os_release("ID=other\nVERSION_ID=44\n").is_err());
+        assert!(parse_os_release("ID=fedora\n").is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn parses_recipes_without_io() -> Result<()> {
+        assert_eq!(
+            parse_recipe(
+                "[[packages]]\nname = \"bash\"\nversion = \"5.2\"\n",
+                Some("toml")
+            )?,
+            ["bash-5.2"]
+        );
+        assert!(parse_recipe("[[packages]]\nname = \"bad value\"\n", Some("toml")).is_err());
+        assert!(parse_recipe("{}", Some("json")).is_err());
         Ok(())
     }
 

@@ -1,4 +1,4 @@
-ARG REPOS_IMAGE=quay.io/fedora/fedora@sha256:8938dce2600de0b78f5ef8d1541192f207fdafb7414d83957f6687147aa8998b
+ARG REPOS_IMAGE=quay.io/fedora/fedora@sha256:80d49c6c7c4303efb5eebc0317e343588d5d482146ca2be48eb82494d2a83060
 ARG CONFIG_BUILDER=localhost/container-rootfs-builder:latest
 ARG FEDORA_RELEASE=44
 ARG ATOMIC_VARIANT=silverblue

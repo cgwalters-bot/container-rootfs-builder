@@ -1,3 +1,5 @@
+//! End-to-end command-line behavior tests.
+
 use assert_cmd::Command;
 use predicates::str::contains;
 use sha2::{Digest, Sha256};
@@ -358,9 +360,19 @@ fn build_rootfs_requires_explicit_source_root_rw() {
 fn repo_image_example_selects_external_repo_files() {
     let file =
         fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/Containerfile.repos")).unwrap();
-    assert!(file.contains("FROM quay.io/fedora/fedora:44"));
+    assert!(file.contains(
+        "FROM quay.io/fedora/fedora@sha256:80d49c6c7c4303efb5eebc0317e343588d5d482146ca2be48eb82494d2a83060"
+    ));
     assert!(file.contains("rm -f /etc/yum.repos.d/*.repo"));
     assert!(file.contains("COPY repos/*.repo /etc/yum.repos.d/"));
+}
+
+#[test]
+fn builder_containerfile_uses_current_runtime_pin() {
+    let file = fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/Containerfile")).unwrap();
+    assert!(file.contains(
+        "ARG RUNTIME_IMAGE=quay.io/fedora/fedora@sha256:e1e716b2f6ca98e1ed41e62d32a7bcbf1637d5b931894299eab9c659a16fe8ed"
+    ));
 }
 
 #[test]
@@ -374,7 +386,7 @@ fn atomic_rootfs_containerfile_does_not_claim_bootability() {
     assert!(file.contains("ARG ATOMIC_VARIANT=silverblue"));
     assert!(file.contains("quay.io/fedora/fedora-${ATOMIC_VARIANT}:${FEDORA_RELEASE}"));
     assert!(file.contains(
-        "quay.io/fedora/fedora@sha256:8938dce2600de0b78f5ef8d1541192f207fdafb7414d83957f6687147aa8998b"
+        "quay.io/fedora/fedora@sha256:80d49c6c7c4303efb5eebc0317e343588d5d482146ca2be48eb82494d2a83060"
     ));
     assert!(file.contains("--source-root=/repos --source-root-rw"));
     assert!(!file.contains("LABEL"));

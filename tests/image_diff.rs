@@ -1,3 +1,5 @@
+//! Command-line tests for image filesystem comparisons.
+
 use assert_cmd::Command;
 use predicates::prelude::PredicateBooleanExt;
 use std::fs;

@@ -1,4 +1,5 @@
 #![forbid(unsafe_code)]
+//! Compare the filesystems of two Podman images.
 
 use std::{
     collections::BTreeMap,
@@ -140,9 +141,13 @@ fn compare_dir(first: &Dir, second: &Dir, relative: &Path, differences: &mut u64
     Ok(())
 }
 
+#[derive(Debug)]
 struct EntryInfo {
     file_type: cap_std::fs::FileType,
     mode: u32,
+    #[cfg(unix)]
+    kind: rustix::fs::FileType,
+    #[cfg(not(unix))]
     kind: u32,
 }
 
@@ -161,7 +166,11 @@ fn entries(dir: &Dir, relative: &Path) -> Result<BTreeMap<OsString, EntryInfo>> 
             )
         })?;
         let (mode, kind) = if file_type.is_symlink() {
-            (0, 0)
+            #[cfg(unix)]
+            let kind = rustix::fs::FileType::Symlink;
+            #[cfg(not(unix))]
+            let kind = 0;
+            (0, kind)
         } else {
             use cap_std::fs::MetadataExt;
             let metadata = entry.metadata().with_context(|| {
@@ -171,7 +180,7 @@ fn entries(dir: &Dir, relative: &Path) -> Result<BTreeMap<OsString, EntryInfo>> 
                 )
             })?;
             #[cfg(unix)]
-            let kind = metadata.mode() & libc::S_IFMT;
+            let kind = rustix::fs::FileType::from_raw_mode(metadata.mode());
             #[cfg(not(unix))]
             let kind = u32::from(file_type.is_dir()) * 1 + u32::from(file_type.is_file()) * 2;
             (metadata.mode() & 0o7777, kind)

@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - name: Set up Ubuntu host
+        uses: bootc-dev/actions/bootc-ubuntu-setup@40859f0934be02542d553a24e8384c693e43e4a8
+        with:
+          libvirt: false
+      - name: Set up Rust
+        uses: bootc-dev/actions/setup-rust@40859f0934be02542d553a24e8384c693e43e4a8
+      - name: Run checks
+        run: just check-all
+      - name: Upload check logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: checks-logs
+          path: target/integration-logs/
+          if-no-files-found: warn
+          retention-days: 7
+
+  rootfs-integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [bootc44, silverblue44, kinoite44]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - name: Set up Ubuntu host
+        uses: bootc-dev/actions/bootc-ubuntu-setup@40859f0934be02542d553a24e8384c693e43e4a8
+        with:
+          libvirt: false
+      - name: Set up Rust
+        uses: bootc-dev/actions/setup-rust@40859f0934be02542d553a24e8384c693e43e4a8
+      - name: Run rootfs integration
+        run: just integration '${{ matrix.case }}'
+      - name: Upload integration logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ${{ matrix.case }}-integration-logs
+          path: target/integration-logs/
+          if-no-files-found: warn
+          retention-days: 7
