@@ -51,7 +51,7 @@ podman build --security-opt=label=disable --cap-add=all --device=/dev/fuse \
 
 Select Kinoite with `--build-arg ATOMIC_VARIANT=kinoite`. To change the Fedora
 release, select both `FEDORA_RELEASE` and a matching `REPOS_IMAGE`. See
-[building details](docs/building.md) for repository injection, source pins,
+[using the builder](docs/using.md) for repository injection, source pins,
 architecture selection, and the rootfs output contract.
 
 ## Development

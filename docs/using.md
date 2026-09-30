@@ -1,9 +1,8 @@
-# Building and source details
+# Using the builder
 
-This page contains the operational details intentionally kept out of the
-README's quick start. The builder consumes pinned source checkouts and invokes
-their native tools; it is not a replacement for those definitions or a new
-Fedora compose service.
+The builder consumes pinned Fedora definitions and invokes their native tools
+to produce a root filesystem. This guide covers choosing an input, running the
+build, and supplying repository configuration.
 
 ## Published builder
 

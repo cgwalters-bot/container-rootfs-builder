@@ -15,7 +15,7 @@ podman run --rm ghcr.io/cgwalters-bot/container-rootfs-builder:latest \
   --from=quay.io/fedora/fedora-silverblue:44 --plan /target-rootfs
 ```
 
-See [building](building.md) for the rootfs contract, repository injection, and
+Continue to [Using the builder](using.md) for the rootfs contract, repository injection, and
 source pins. The [DNF5 chroot](background-dnf5-chroot.md), [DNF5 manifest](background-dnf5-manifest.md),
 and [Hummingbird](background-hummingbird.md) pages describe related background.
 Possible follow-on work is collected in [ideas](ideas.md).

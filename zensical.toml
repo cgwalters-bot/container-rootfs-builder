@@ -6,7 +6,7 @@ docs_dir = "docs"
 site_dir = "site"
 nav = [
   { Overview = "index.md" },
-  { Building = "building.md" },
+  { Using = "using.md" },
   { Background = [
     { "DNF5 chroot" = "background-dnf5-chroot.md" },
     { "DNF5 manifest" = "background-dnf5-manifest.md" },
@@ -17,3 +17,4 @@ nav = [
 
 [project.theme]
 custom_dir = "overrides"
+features = ["navigation.footer", "navigation.top"]
