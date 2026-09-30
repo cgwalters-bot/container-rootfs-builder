@@ -2,209 +2,77 @@
 
 > **100% LLM-generated; not yet reviewed by a human; experimental.**
 
-Temporarily hosted under `cgwalters-bot` on GitHub; the plan is to move this
-experiment to Fedora Forge. This is not an official Fedora project or release.
+This demo extends Fedora's
+[`bootc-base-imagectl`](https://gitlab.com/fedora/bootc/base-images) into one
+container-runnable interface for Fedora bootc, Silverblue, and Kinoite content
+definitions. It ships pinned upstream configurations and runs their existing
+rpm-ostree build paths. It is a wrapper, not a new Fedora build system.
 
-This is not a new Fedora build process. The goal is to wrap existing content
-definitions and build processes in an interface that can run from a container
-image. The CLI selects pinned upstream definitions and delegates the actual
-rootfs build to existing tools, rather than replacing their semantics with a
-project-owned recipe format. It does not claim published-image provenance or
-bootability without verification.
+The common output is a root filesystem. Definitions and build tooling can be
+shared without sharing physical image layers; OCI packaging remains a separate
+step. The catalog can grow to cover other definitions and backends without
+turning them into a lowest-common-denominator package list.
 
-Background only: [Hummingbird container construction](docs/background-hummingbird.md)
-and [DNF5 installroot/chroot scope](docs/background-dnf5-chroot.md), plus the
-experimental [DNF5 RPM manifest workflow](docs/background-dnf5-manifest.md).
+GitHub is temporary hosting ahead of a planned move to Fedora Forge. This is
+not an official Fedora project, and generated rootfs outputs are not certified
+equivalents of Fedora's published images or VM-boot tested.
 
-This first spike has one shared, typed source catalog for the three Fedora bootc
-release references and four F44/F45 Atomic Desktop references. The bootc path
-uses the pinned
-[`bootc-base-imagectl`](https://gitlab.com/fedora/bootc/base-images/-/blob/bbea58e7db3b403785d632d7db3f75bfe6cd5415/bootc-base-imagectl)
-to delegate to `rpm-ostree compose rootfs`. The experimental Silverblue and
-Kinoite paths invoke that rpm-ostree operation directly with their native
-manifests. KIWI/Pungi definitions remain plan-only. DNF is a possible future
-backend, not part of this spike; longer term it could be used
-as a backend without changing the upstream definitions. The closed, unmerged
-[DNF5 PR #2270](https://github.com/rpm-software-management/dnf5/pull/2270)
-explored optional mount preparation for `dnf5 --installroot` inside a container
-build. [The discussion](https://github.com/rpm-software-management/dnf5/pull/2270#issuecomment-2932126936)
-connects that directly to bootstrapping a rootfs for the Fedora
-[from-scratch flow](https://docs.fedoraproject.org/en-US/bootc/building-from-scratch/).
-It is prior art for a possible DNF backend, not a merged feature or a complete
-bootc rootfs finalization process.
+## Try the planner
 
-## Plan and inspect
-
-`--from` accepts exact, fully qualified references. KIWI/Pungi entries are
-plan-only; Silverblue and Kinoite have experimental rootfs-only paths. Aliases,
-unqualified names, and unknown tags are rejected.
+CI builds the builder for `linux/amd64` and `linux/arm64` and publishes it to
+GHCR after the tests pass on `main`. Rootfs integration tests currently run on
+x86_64; publishing an arm64 builder does not establish arm64 rootfs coverage.
 
 ```console
-container-rootfs-builder --from=quay.io/fedora/fedora:45 --plan /target-rootfs
-container-rootfs-builder --from=quay.io/fedora/fedora-bootc:43 --plan /target-rootfs
-container-rootfs-builder --from=quay.io/fedora/fedora-bootc:44 --plan /target-rootfs
-container-rootfs-builder --from=quay.io/fedora/fedora-bootc:45 --plan /target-rootfs
-container-rootfs-builder --from=quay.io/fedora/fedora-silverblue:44 --plan /target-rootfs
-container-rootfs-builder --from=quay.io/fedora/fedora-kinoite:44 --plan /target-rootfs
-container-rootfs-builder --from=quay.io/fedora/fedora-silverblue:45 --plan /target-rootfs
-container-rootfs-builder --from=quay.io/fedora/fedora-kinoite:45 --plan /target-rootfs
-podman build -t localhost/container-rootfs-builder:latest -f Containerfile .
-podman run --rm localhost/container-rootfs-builder:latest
+podman run --rm ghcr.io/cgwalters-bot/container-rootfs-builder:latest \
+  --from=quay.io/fedora/fedora-silverblue:44 --plan /target-rootfs
 ```
 
-Compare image filesystems with networking disabled in the helper container.
-Both input images are mounted read-only, and comparison ignores timestamps,
-ownership, and xattrs (these are
-not implemented); it reports paths, types, symlink targets, permissions, and
-streamed regular-file contents. Other Unix special files are compared by
-their type and permissions, not by contents:
+The accepted executable references are exact: bootc 43, 44, and 45, plus
+Silverblue and Kinoite 44 and 45. Aliases, unqualified names, and unknown
+references fail rather than guessing a source mapping.
 
-```console
-image-diff FIRST SECOND
-image-diff --helper-image localhost/container-rootfs-builder:latest FIRST SECOND
-```
+## Build a rootfs
 
-The builder embeds pinned F43, F44, and F45 KIWI/Pungi sources and the pinned
-official Fedora [bootc/base-images](https://gitlab.com/fedora/bootc/base-images)
-checkout. F43/F44 are demonstration release branches; F45 is a Beta target.
-Recorded commits and internal hashes describe these checkouts, not published
-images. Source contents and version status can change upstream.
-
-## Build a Fedora rootfs
-
-The builder installs the pinned official Python `bootc-base-imagectl` and its
-manifests from commit `bbea58e7db3b403785d632d7db3f75bfe6cd5415`, plus
-`rpm-ostree`, bootc, Python, and SELinux policy dependencies. For
-`quay.io/fedora/fedora-bootc:<43|44|45>` it runs:
-
-```text
-bootc-base-imagectl build-rootfs --manifest=standard SOURCE_ROOT TARGET
-```
-
-`SOURCE_ROOT` is an absolute mounted Fedora repository-image root. By default
-its `/etc/os-release` release must match `--from`; `--releasever` selection is
-unsupported. `--source-root-rw` is required because the helper may update RPM
-metadata; use it only with a disposable source image.
-
-`Containerfile.rootfs` defaults to Fedora 44 for both the bootc image and the
-official repository image. The digest is a `linux/amd64` selection:
-the pinned Quay manifest is a reachability check, not a promise of permanent
-registry retention. When intentionally bumping a pin, verify its remote
-manifest and Fedora release/architecture metadata before updating all copies.
+From a checkout, the default `Containerfile.rootfs` path builds the Fedora 44
+bootc rootfs. The Atomic Desktop counterpart defaults to Silverblue 44. Both
+commands below use the published builder; rpm-ostree's nested build environment
+needs the shown capabilities and device access.
 
 ```console
 podman build --security-opt=label=disable --cap-add=all --device=/dev/fuse \
-  --build-arg CONFIG_BUILDER=localhost/container-rootfs-builder:latest \
-  --build-arg REPOS_IMAGE=quay.io/fedora/fedora@sha256:80d49c6c7c4303efb5eebc0317e343588d5d482146ca2be48eb82494d2a83060 \
-  -f Containerfile.rootfs -t localhost/fedora-bootc-from-scratch:44 .
-```
+  --build-arg CONFIG_BUILDER=ghcr.io/cgwalters-bot/container-rootfs-builder:latest \
+  -f Containerfile.rootfs -t localhost/fedora-bootc-rootfs:44 .
 
-To inject selected repositories, use a separate disposable context; never add
-credentials or `.repo` files here. `Containerfile.repos` is the sample image
-definition. Create `repo-image-context/repos/fedora44-sample.repo` with real
-Fedora metalink settings, then run:
-
-```console
-mkdir -p repo-image-context/repos
-cp Containerfile.repos repo-image-context/Containerfile
-cat > repo-image-context/repos/fedora44-sample.repo <<'EOF'
-[fedora44-sample]
-name=Fedora 44 sample repository ($basearch)
-metalink=https://mirrors.fedoraproject.org/metalink?repo=fedora-44&arch=$basearch
-enabled=1
-gpgcheck=1
-gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-44-$basearch
-EOF
-podman build -f repo-image-context/Containerfile -t localhost/fedora-44-selected-repos:local repo-image-context
-podman run --rm localhost/fedora-44-selected-repos:local dnf repolist --enabled fedora44-sample
 podman build --security-opt=label=disable --cap-add=all --device=/dev/fuse \
-  --build-arg CONFIG_BUILDER=localhost/container-rootfs-builder:latest \
-  --build-arg REPOS_IMAGE=localhost/fedora-44-selected-repos:local \
-  -f Containerfile.rootfs -t localhost/fedora-bootc-from-scratch:44 .
+  --build-arg CONFIG_BUILDER=ghcr.io/cgwalters-bot/container-rootfs-builder:latest \
+  -f Containerfile.atomic-rootfs -t localhost/fedora-silverblue-rootfs:44 .
 ```
 
-The source image must still identify Fedora 44. Matching `--from` and source
-image is the supported path; `--allow-cross-release` is intentionally not
-wired into this workflow. Verify outputs rather than assuming parity:
-
-```console
-podman run --rm --entrypoint rpm localhost/fedora-bootc-from-scratch:44 -E '%{fedora}'
-podman run --rm --security-opt=label=disable --cap-add=all --device=/dev/fuse --entrypoint bootc localhost/fedora-bootc-from-scratch:44 container lint
-```
-
-Rootless Podman has been exercised; other hosts may require the shown
-capabilities or device access. See the upstream [bootc documentation](https://bootc.dev/),
-[bootc-dev/bootc](https://github.com/bootc-dev/bootc), and
-[base-images](https://gitlab.com/fedora/bootc/base-images).
-
-### Experimental Atomic Desktop rootfs
-
-Silverblue and Kinoite references for Fedora 44 and 45 are enabled, using the
-complete pinned Atomic Desktops checkouts at commits
-`1a1effa1ae6ef22c961ff5962ec314d9208231e1` (f44) and
-`9dbdbe2f1c8009b2257201ffd4719100ff0b0ba1` (f45). After the shared target and
-Fedora release checks, `rpm-ostree compose tree --print-only` checks the treefile,
-its includes, and referenced files; repository resolution happens only during
-the subsequent
-`rpm-ostree compose rootfs --source-root-rw=/repos` with that manifest and the
-requested target. This deliberately leaves manifest includes and non-YAML
-inputs to rpm-ostree and the pinned checkout; it does not parse or translate
-the Atomic Desktop configuration.
-
-To exercise either Fedora 44 path using a disposable matching repository source
-image (the digest selects `linux/amd64`), leave `FEDORA_RELEASE` at 44 and
-`ATOMIC_VARIANT` at `silverblue`, or set the variant to `kinoite`:
-
-```console
-podman build --security-opt=label=disable --cap-add=all --device=/dev/fuse \
-  --build-arg CONFIG_BUILDER=localhost/container-rootfs-builder:latest \
-  --build-arg REPOS_IMAGE=quay.io/fedora/fedora@sha256:80d49c6c7c4303efb5eebc0317e343588d5d482146ca2be48eb82494d2a83060 \
-  --build-arg ATOMIC_VARIANT=kinoite \
-  -f Containerfile.atomic-rootfs -t localhost/kinoite-rootfs-experiment:44 .
-podman run --rm --entrypoint rpm localhost/kinoite-rootfs-experiment:44 -E '%{fedora}'
-```
-
-This is an experimental plain filesystem rootfs only. The container build is
-transport for that rootfs, not the default product or an image-compose API.
-`FROM scratch` plus `COPY` flattens it into a filesystem layer; it does **not**
-preserve the OSTree commit metadata, OCI configuration (including the
-treefile's command), or package-aware layering produced by Silverblue's upstream
-`rpm-ostree compose image` pipeline. `Containerfile.atomic-rootfs` does not add
-bootc or ostree bootability labels or a command. Do not claim bootability or
-report `bootc container lint` as a gate for this output. These source mappings
-are not claims that the experiment reproduces published OCI images. Other
-desktops have not been mapped or built.
+Select Kinoite with `--build-arg ATOMIC_VARIANT=kinoite`. To change the Fedora
+release, select both `FEDORA_RELEASE` and a matching `REPOS_IMAGE`. See
+[building details](docs/building.md) for repository injection, source pins,
+architecture selection, and the rootfs output contract.
 
 ## Development
 
-`just fmt` formats Rust sources; `just fmt-check` checks formatting without
-modifying files. `just validate` runs static checks, and `just check-all` adds
-unit/CLI tests. `just unit` (also `just test`) uses nextest when available,
-otherwise Cargo's test runner. Ignored container tests remain opt-in.
-
-### Continuous integration
-
-GitHub CI runs `just check-all` and independent Fedora 44 rootfs integration
-jobs for bootc, Silverblue, and Kinoite. CI is automated evidence only: this
-repository still requires human review, and the desktop rootfs checks do not
-claim bootability.
-
 ```console
-cargo fmt --check
-cargo test
-cargo clippy --all-targets -- -D warnings
+just check-all
+just integration all
 ```
 
-### Opt-in container integration
+Container integration is opt-in and requires Podman, network access, `/dev/fuse`,
+and several GB of storage. Detailed logs go to `target/integration-logs/`.
 
-`just integration kinoite44` runs the ignored container suite for one case;
-`just integration` runs `bootc44`, `silverblue44`, and `kinoite44` sequentially.
-The `integration` argument also accepts comma-separated cases. For direct
-Cargo use, `INTEGRATION_CASES=bootc44,kinoite44 cargo test --test
-container_integration -- --ignored --nocapture` selects a subset. It requires Fedora Linux, rootless-capable Podman, `just`, network
-access, `/dev/fuse`, and several GB of temporary image/build space. The suite
-builds a current-tree helper image, uses the pinned repository image and the
-same `Containerfile.rootfs`/`Containerfile.atomic-rootfs` capabilities shown
-above, and records full command output under `target/integration-logs/` while
-printing only pass/fail summaries. Atomic Desktop checks are rootfs checks, not
-boot tests; future bcvk/VM boot tests are intentionally separate.
+For a focused filesystem comparison, see
+[`image-diff`](src/bin/image-diff.rs), for example
+`image-diff FIRST SECOND`. It compares mounted image filesystems with networking
+disabled in the helper container;
+it is not a bootability check.
+
+The [DNF5 chroot](docs/background-dnf5-chroot.md), [DNF5 manifest](docs/background-dnf5-manifest.md),
+and [Hummingbird](docs/background-hummingbird.md) pages provide background; [ideas](docs/ideas.md)
+records possible future backends and scope.
+
+This project is licensed under Apache-2.0. The upstream
+`bootc-base-imagectl` helper's MIT `COPYING` notice is retained in the image.
