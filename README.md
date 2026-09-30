@@ -76,3 +76,8 @@ records possible future backends and scope.
 
 This project is licensed under Apache-2.0. The upstream
 `bootc-base-imagectl` helper's MIT `COPYING` notice is retained in the image.
+
+## Documentation
+
+Read the [project site](https://cgwalters-bot.github.io/container-rootfs-builder/)
+for the overview and background. Build it locally with `just docs-check`.

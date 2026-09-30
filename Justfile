@@ -54,6 +54,29 @@ validate: fmt-check check clippy
 
 check-all: validate unit
 
+# Provision the repository-local documentation environment.
+docs-venv:
+    @mkdir -p target/integration-logs target/docs-venv
+    @if [[ ! -x target/docs-venv/bin/zensical ]]; then \
+        python3 -m venv target/docs-venv && \
+        target/docs-venv/bin/python -m pip install --disable-pip-version-check -r requirements-docs.txt >target/integration-logs/docs-venv-install.log 2>&1; \
+    fi
+
+# Build the documentation in a repository-local Python environment.
+docs: docs-venv
+    @target/docs-venv/bin/zensical build --clean
+
+# Build the documentation with strict link and configuration checks.
+docs-check: docs-venv
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if target/docs-venv/bin/zensical build --clean --strict >target/integration-logs/zensical.log 2>&1; then
+        echo 'PASS docs-check (target/integration-logs/zensical.log)'
+    else
+        echo 'FAIL docs-check (target/integration-logs/zensical.log)'
+        exit 1
+    fi
+
 # Build the helper image without changing the normal :latest tag.
 builder:
     @mkdir -p target/integration-logs

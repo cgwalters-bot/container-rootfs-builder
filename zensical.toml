@@ -1,0 +1,16 @@
+[project]
+site_name = "container-rootfs-builder"
+site_url = "https://cgwalters-bot.github.io/container-rootfs-builder/"
+repo_url = "https://github.com/cgwalters-bot/container-rootfs-builder"
+docs_dir = "docs"
+site_dir = "site"
+nav = [
+  { Overview = "index.md" },
+  { Building = "building.md" },
+  { Background = [
+    { "DNF5 chroot" = "background-dnf5-chroot.md" },
+    { "DNF5 manifest" = "background-dnf5-manifest.md" },
+    { Hummingbird = "background-hummingbird.md" },
+  ] },
+  { Ideas = "ideas.md" },
+]
